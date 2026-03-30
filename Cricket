@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cricket App Live</title>
+<style>
+body { font-family: Arial; background:#2c3e50; color:white; text-align:center; margin:0; padding:0; }
+h1,h2,h3,h4{margin:10px;}
+.box{background:#34495e; margin:20px auto; padding:20px; border-radius:15px; max-width:400px;}
+input, button{padding:10px; margin:5px; width:80%; max-width:300px; border-radius:8px; border:none;}
+img#teamLogo{max-width:100px; max-height:100px; margin:10px 0; border-radius:10px;}
+#qr-reader{width:300px; margin:10px auto;}
+button:hover{cursor:pointer; background:#1abc9c; color:black;}
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+
+<h1>🏏 Cricket App Live</h1>
+
+<!-- Signup/Login -->
+<div class="box" id="loginBox">
+<h3>Signup / Login</h3>
+<input id="user" placeholder="Username"><br>
+<input id="pass" type="password" placeholder="Password"><br>
+<button onclick="signup()">Signup</button>
+<button onclick="login()">Login</button>
+</div>
+
+<!-- App Main -->
+<div id="app" style="display:none;">
+<h2 id="welcome"></h2>
+
+<!-- Team Setup -->
+<div class="box">
+<h3>Team Setup</h3>
+<input id="teamName" placeholder="Team Name"><br>
+<input type="file" id="logoInput" accept="image/*"><br>
+<img id="teamLogo" src="" alt=""><br>
+<input id="playerName" placeholder="Player Name">
+<button onclick="addPlayer()">Add Player</button>
+<ul id="playerList"></ul>
+<button onclick="saveTeam()">Save Team</button>
+</div>
+
+<!-- QR Code -->
+<div class="box">
+<h3>Your Team QR Code</h3>
+<canvas id="qr"></canvas>
+</div>
+
+<!-- Display Team -->
+<div class="box">
+<h3>Full Team</h3>
+<div id="teamsDisplay"></div>
+</div>
+
+<!-- Scan Opponent -->
+<div class="box">
+<h3>Scan Opponent QR</h3>
+<div id="qr-reader"></div>
+<button onclick="startScan()">Start Scanner</button>
+<p id="scanResult"></p>
+</div>
+
+<!-- Match Settings -->
+<div id="matchBox" class="box" style="display:none;">
+<h3>Match: <span id="matchTeams"></span></h3>
+<label>Overs: <input type="number" id="totalOvers" min="1" max="50" value="5"></label>
+<button onclick="startMatch()">Start Match</button>
+</div>
+
+<!-- Live Match -->
+<div id="liveMatch" class="box" style="display:none;">
+<h3>Live Match</h3>
+
+<div>
+<h4>Team 1 Controls</h4>
+<button onclick="captainAction(matchData.team1,'run')">+Run</button>
+<button onclick="captainAction(matchData.team1,'ball')">+Ball</button>
+<button onclick="captainAction(matchData.team1,'noBall')">No-Ball</button>
+</div>
+
+<div>
+<h4>Team 2 Controls</h4>
+<button onclick="captainAction(matchData.team2,'run')">+Run</button>
+<button onclick="captainAction(matchData.team2,'ball')">+Ball</button>
+<button onclick="captainAction(matchData.team2,'noBall')">No-Ball</button>
+</div>
+
+<div id="scores">
+<p id="team1Score">Runs: 0, Balls: 0, Overs: 0</p>
+<p id="team2Score">Runs: 0, Balls: 0, Overs: 0</p>
+</div>
+</div>
+
+<script>
+// Globals
+let players = [];
+let teamData = {};
+let opponentTeamData = {};
+let matchData = {};
+
+// Signup/Login
+function signup(){
+  let user = document.getElementById("user").value;
+  let pass = document.getElementById("pass").value;
+  if(user && pass){ localStorage.setItem("user", user); localStorage.setItem("pass", pass); alert("Signup successful! Login now."); }
+  else alert("Fill all fields");
+}
+function login(){
+  let user = document.getElementById("user").value;
+  let pass = document.getElementById("pass").value;
+  let savedUser = localStorage.getItem("user");
+  let savedPass = localStorage.getItem("pass");
+  if(user===savedUser && pass===savedPass){
+    document.getElementById("loginBox").style.display="none";
+    document.getElementById("app").style.display="block";
+    document.getElementById("welcome").innerText = "Welcome "+user;
+    let savedTeam = localStorage.getItem("teamData");
+    if(savedTeam){ teamData=JSON.parse(savedTeam); displayTeam(); generateQR(); }
+  } else alert("Wrong login!");
+}
+
+// Logo Preview
+document.getElementById("logoInput").addEventListener("change", function(event){
+  let reader = new FileReader();
+  reader.onload = function(){ document.getElementById("teamLogo").src = reader.result; teamData.logo = reader.result; }
+  reader.readAsDataURL(event.target.files[0]);
+});
+
+// Players
+function addPlayer(){
+  let name = document.getElementById("playerName").value;
+  if(name){ players.push(name); document.getElementById("playerList").innerHTML += "<li>"+name+"</li>"; document.getElementById("playerName").value=""; }
+}
+
+// Save Team
+function saveTeam(){
+  let team = document.getElementById("teamName").value;
+  if(!team || players.length==0 || !teamData.logo){ alert("Team name, logo & players required!"); return; }
+  teamData.name=team; teamData.players=players;
+  localStorage.setItem("teamData", JSON.stringify(teamData));
+  displayTeam(); generateQR();
+  players=[]; document.getElementById("playerList").innerHTML=""; document.getElementById("teamName").value=""; document.getElementById("teamLogo").src=""; document.getElementById("logoInput").value="";
+}
+
+// Display Team
+function displayTeam(){
+  document.getElementById("teamsDisplay").innerHTML=`<h4>${teamData.name}</h4><img src="${teamData.logo}" style="max-width:80px; max-height:80px"><br>Players: ${teamData.players.join(", ")}`;
+}
+
+// Generate QR
+function generateQR(){ new QRious({element:document.getElementById('qr'), value:JSON.stringify(teamData), size:150}); }
+
+// QR Scanner
+function startScan(){
+  const html5QrCode = new Html5Qrcode("qr-reader");
+  html5QrCode.start({facingMode:"environment"}, {fps:10, qrbox:250}, qrCodeMessage=>{
+    html5QrCode.stop();
+    opponentTeamData = JSON.parse(qrCodeMessage);
+    vsAnimation();
+  }, errorMessage=>{});
+}
+
+// VS Animation
+function vsAnimation(){
+  alert(`VS Screen!\n${teamData.name} VS ${opponentTeamData.name}`);
+  document.getElementById("matchBox").style.display="block";
+  document.getElementById("matchTeams").innerText=`${teamData.name} VS ${opponentTeamData.name}`;
+}
+
+// Start Match
+function startMatch(){
+  let overs = parseInt(document.getElementById("totalOvers").value);
+  matchData={overs:overs, team1:{...teamData,runs:0,balls:0,overs:0}, team2:{...opponentTeamData,runs:0,balls:0,overs:0}};
+  document.getElementById("matchBox").style.display="none"; document.getElementById("liveMatch").style.display="block"; updateDisplay();
+}
+
+// Captain Actions
+function captainAction(team,actionType){
+  let opponentTeam=(team===matchData.team1)?matchData.team2:matchData.team1;
+  if(actionType==="noBall"){
+    let yes=confirm(`${opponentTeam.name}: Captain wants to add No-Ball (+1 run). Correct?`);
+    if(yes){ team.runs+=1; updateDisplay(); }
+  } else {
+    let yes=confirm(`${opponentTeam.name}: Captain wants to add ${actionType}?`);
+    if(yes){
+      if(actionType==="run") team.runs+=1;
+      if(actionType==="ball"){ team.balls+=1; if(team.balls>=6){ team.overs+=1; team.balls=0; alert(`${team.name} completed an over!`); } }
+      updateDisplay();
+    }
+  }
+}
+
+// Update Display
+function updateDisplay(){
+  document.getElementById("team1Score").innerText=`Runs: ${matchData.team1.runs}, Balls: ${matchData.team1.balls}, Overs: ${matchData.team1.overs}`;
+  document.getElementById("team2Score").innerText=`Runs: ${matchData.team2.runs}, Balls: ${matchData.team2.balls}, Overs: ${matchData.team2.overs}`;
+}
+</script>
+
+</body>
+</html>
